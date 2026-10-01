@@ -5,7 +5,7 @@ import time
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
 
-async def randomize_sleep(min_seconds=1.0, max_seconds=2.0):
+async def randomize_sleep(min_seconds=0.5, max_seconds=1.0):
     """Asynchronously sleeps for a random float duration between min_seconds and max_seconds."""
     duration = random.uniform(min_seconds, max_seconds)
     await asyncio.sleep(duration)
@@ -171,23 +171,89 @@ async def main():
 
         await asyncio.sleep(await randomize_sleep())
 
-        # Email Address
-        await page.locator('[data-autom="form-field-emailAddress"]').fill("john.doe@example.com")
+        # # check the check-box
+        # Click the visual check mark box directly
+        # await page.locator(
+        #     'label[for="checkout.shipping.addressSelector.newAddress.address.isBusinessAddress"] .form-checkbox-indicator').click()
+        # await asyncio.sleep(await randomize_sleep())
+
+        # 1. Check the business address box
+        await page.locator(
+            'label[for="checkout.shipping.addressSelector.newAddress.address.isBusinessAddress"] .form-checkbox-indicator'
+        ).click()
 
         await asyncio.sleep(await randomize_sleep())
 
-        # check the check-box
-        await page.locator('[data-autom="form-field-isBusinessAddress"]').check()
+        email = page.locator(
+            'fieldset.rs-shipping-addresscontact input[data-autom="form-field-emailAddress"]'
+        )
+        # or by id (dots need the attribute form, not #id):
+        # email = page.locator('[id="checkout.shipping.addressContactEmail.address.emailAddress"]')
 
+        await email.wait_for(state="visible", timeout=5000)
+        await email.click()
+        await email.press_sequentially("john.doe@example.com", delay=60)
+        await email.press("Tab")
+
+        assert await email.input_value() == "john.doe@example.com"
         await asyncio.sleep(await randomize_sleep())
 
-        # Mobile Phone Number
+
+        # # Mobile Phone Number
         await page.locator('[data-autom="form-field-mobilePhone"]').fill("91234567")
 
         await asyncio.sleep(await randomize_sleep())
 
-        # Click "Continue to Payment"
+        # # Click "Continue to Payment"
         await page.locator('[data-autom="shipping-continue-button"]').click()
+
+        await asyncio.sleep(await randomize_sleep())
+
+        # select payment method
+        await page.locator('label[for="checkout.billing.billingoptions.credit"]').click()
+
+        # enter card number
+        await page.locator('[data-autom="card-number-input"]').fill("4111111111111111")
+
+        # enter expiration date
+        await page.locator('[data-autom="expiration-input"]').fill("12/28")
+
+        # Enter CVV / Security Code
+        await page.locator('[data-autom="security-code-input"]').fill("123")
+
+        # check-box: use my shipping address
+        await page.locator('[data-autom="shippingAddressCheckbox"]').check(force=True)
+
+        await asyncio.sleep(await randomize_sleep())
+
+        await asyncio.sleep(6)
+
+        # 2. Wait for any loading spinners to finish fading out
+        await page.wait_for_selector('.waitindicator', state="hidden", timeout=5000)
+
+        # 3. Blur the last input to ensure form validation state updates
+        await page.locator('[data-autom="security-code-input"]').blur()
+        await asyncio.sleep(1)
+
+        # 4. Trigger full event sequence on the Review button
+        await page.evaluate("""() => {
+            const btn = document.querySelector('[data-autom="continue-button-review"]')
+                || document.getElementById('rs-checkout-continue-button-bottom');
+            if (btn) {
+                btn.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true}));
+                btn.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, cancelable: true}));
+                btn.click();
+            }
+        }""")
+
+        await asyncio.sleep(await randomize_sleep())
+
+        # click button 'place your order'
+        place_order_btn = page.locator('[data-autom="continue-button-placeOrder"]')
+
+        # Scroll into view and click
+        await place_order_btn.scroll_into_view_if_needed()
+        await place_order_btn.click()
 
         await asyncio.sleep(await randomize_sleep())
 
